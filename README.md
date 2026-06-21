@@ -67,6 +67,23 @@ If a result has exactly two columns and the second is numeric, a
 Every table panel on the dashboard, and every console result, has an
 **Export CSV** button — generated client-side, no server round-trip.
 
+## Date-range filter
+
+The dashboard has a **From / To** filter bar. It applies to any panel whose
+SQL references the `:start_date` / `:end_date` named parameters (everything
+backed by `orders.order_date` in the sample queries); panels that don't use
+those placeholders, like "Acquisition Channel," are unaffected.
+
+To make a panel filterable, add this to its `WHERE` clause:
+
+```sql
+AND o.order_date >= COALESCE(:start_date, '0000-01-01')
+AND o.order_date <= COALESCE(:end_date, '9999-12-31')
+```
+
+The server validates both dates (`YYYY-MM-DD`) and binds them as SQL
+parameters — never string-interpolated — before running every panel's query.
+
 ## Safety
 
 Queries are **read-only**, enforced two ways:

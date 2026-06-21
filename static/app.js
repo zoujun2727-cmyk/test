@@ -150,9 +150,13 @@ function exportButton(filename, columns, rows) {
 
 // ---------- dashboard view ----------
 
-async function loadDashboard() {
+async function loadDashboard(startDate, endDate) {
   const container = document.getElementById("panels");
-  const res = await fetch("/api/dashboard");
+  const params = new URLSearchParams();
+  if (startDate) params.set("start", startDate);
+  if (endDate) params.set("end", endDate);
+  const qs = params.toString();
+  const res = await fetch("/api/dashboard" + (qs ? "?" + qs : ""));
   const spec = await res.json();
   if (spec.error) {
     container.innerHTML = `<p class="panel-error">${spec.error}</p>`;
@@ -286,8 +290,23 @@ function initTabs() {
   });
 }
 
+function initDateFilter() {
+  const startInput = document.getElementById("filter-start");
+  const endInput = document.getElementById("filter-end");
+  const applyBtn = document.getElementById("filter-apply");
+  const clearBtn = document.getElementById("filter-clear");
+
+  applyBtn.addEventListener("click", () => loadDashboard(startInput.value, endInput.value));
+  clearBtn.addEventListener("click", () => {
+    startInput.value = "";
+    endInput.value = "";
+    loadDashboard();
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   initTabs();
+  initDateFilter();
   loadDashboard();
   loadSchema();
   document.getElementById("run-btn").addEventListener("click", runQuery);

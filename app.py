@@ -17,10 +17,12 @@ Run:
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import sqlite3
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlparse, parse_qs
 
 BASE = Path(__file__).parent
 DB_PATH = BASE / "analytics.db"
@@ -48,7 +50,7 @@ def open_readonly() -> sqlite3.Connection:
     return conn
 
 
-def run_sql(conn: sqlite3.Connection, sql: str, *, enforce_select: bool = False):
+def run_sql(conn: sqlite3.Connection, sql: str, *, enforce_select: bool = False, params=None):
     """Execute SQL and return {columns, rows}. Optionally require a SELECT."""
     stripped = sql.strip().rstrip(";").strip()
     if not stripped:
@@ -62,7 +64,7 @@ def run_sql(conn: sqlite3.Connection, sql: str, *, enforce_select: bool = False)
             raise QueryError("Only read-only SELECT queries are allowed here.")
 
     try:
-        cur = conn.execute(stripped)
+        cur = conn.execute(stripped, params or {})
     except sqlite3.Error as exc:
         raise QueryError(f"SQL error: {exc}") from exc
 
@@ -72,13 +74,27 @@ def run_sql(conn: sqlite3.Connection, sql: str, *, enforce_select: bool = False)
     return {"columns": columns, "rows": rows, "truncated": truncated}
 
 
-def load_dashboard():
+def _validate_date(value: str | None, label: str) -> str | None:
+    if value is None or value == "":
+        return None
+    try:
+        dt.date.fromisoformat(value)
+    except ValueError:
+        raise QueryError(f"Invalid {label} date: {value!r} (expected YYYY-MM-DD)")
+    return value
+
+
+def load_dashboard(start_date: str | None = None, end_date: str | None = None):
+    start_date = _validate_date(start_date, "start")
+    end_date = _validate_date(end_date, "end")
+    params = {"start_date": start_date, "end_date": end_date}
+
     spec = json.loads(DASHBOARDS.read_text())
     conn = open_readonly()
     try:
         for panel in spec["panels"]:
             try:
-                result = run_sql(conn, panel["sql"])
+                result = run_sql(conn, panel["sql"], params=params)
                 panel["result"] = result
             except QueryError as exc:
                 panel["error"] = str(exc)
@@ -131,18 +147,22 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        if self.path in ("/", "/index.html"):
+        parsed = urlparse(self.path)
+        if parsed.path in ("/", "/index.html"):
             self._send_file(STATIC / "index.html", "text/html; charset=utf-8")
-        elif self.path == "/app.js":
+        elif parsed.path == "/app.js":
             self._send_file(STATIC / "app.js", "application/javascript")
-        elif self.path == "/style.css":
+        elif parsed.path == "/style.css":
             self._send_file(STATIC / "style.css", "text/css")
-        elif self.path == "/api/dashboard":
+        elif parsed.path == "/api/dashboard":
+            qs = parse_qs(parsed.query)
+            start_date = qs.get("start", [None])[0]
+            end_date = qs.get("end", [None])[0]
             try:
-                self._send_json(load_dashboard())
+                self._send_json(load_dashboard(start_date, end_date))
             except QueryError as exc:
                 self._send_json({"error": str(exc)}, status=400)
-        elif self.path == "/api/schema":
+        elif parsed.path == "/api/schema":
             try:
                 self._send_json(get_schema())
             except QueryError as exc:

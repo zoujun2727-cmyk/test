@@ -17,6 +17,13 @@
 
   <main>
     <section id="dashboard" class="view active">
+      <div class="date-filter">
+        <label>From <input type="date" id="filter-start" /></label>
+        <label>To <input type="date" id="filter-end" /></label>
+        <button id="filter-apply">Apply</button>
+        <button id="filter-clear" class="secondary">Clear</button>
+        <span class="note">Filters all panels backed by order date.</span>
+      </div>
       <div id="panels" class="panels">
         <p class="loading">Loading dashboard…</p>
       </div>
