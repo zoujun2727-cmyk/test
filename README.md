@@ -59,6 +59,14 @@ The **SQL Console** tab runs ad-hoc queries against the same database. The
 schema sidebar lists every table and column — click a table name to drop it
 into the editor. Run with the button or **Ctrl/Cmd + Enter**.
 
+If a result has exactly two columns and the second is numeric, a
+**"View as chart"** toggle appears to render it as a bar chart on the fly.
+
+## Exporting
+
+Every table panel on the dashboard, and every console result, has an
+**Export CSV** button — generated client-side, no server round-trip.
+
 ## Safety
 
 Queries are **read-only**, enforced two ways:

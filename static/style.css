@@ -141,3 +141,20 @@ textarea#sql-input {
 
 .loading { color: var(--muted); }
 .note { color: var(--muted); font-size: 12px; padding: 8px 12px; }
+
+.export-btn, .chart-toggle {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 12px;
+  margin-top: 10px;
+}
+.export-btn:hover, .chart-toggle:hover { border-color: var(--accent); }
+
+.result-toolbar { display: flex; gap: 10px; padding: 10px 14px 0; }
+.result-toolbar .export-btn, .result-toolbar .chart-toggle { margin-top: 0; }
+.result-body { padding: 4px 0; }
+.result-body svg { padding: 10px 14px; }

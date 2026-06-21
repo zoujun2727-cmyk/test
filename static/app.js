@@ -119,6 +119,35 @@ function dataTable(columns, rows) {
   return el("table", {}, [thead, tbody]);
 }
 
+// ---------- CSV export ----------
+
+function csvEscape(v) {
+  const s = v === null || v === undefined ? "" : String(v);
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function toCSV(columns, rows) {
+  const lines = [columns.map(csvEscape).join(",")];
+  for (const r of rows) lines.push(r.map(csvEscape).join(","));
+  return lines.join("\n");
+}
+
+function downloadCSV(filename, columns, rows) {
+  const blob = new Blob([toCSV(columns, rows)], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = el("a", { href: url, download: filename });
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function exportButton(filename, columns, rows) {
+  const btn = el("button", { class: "export-btn" }, "Export CSV");
+  btn.addEventListener("click", () => downloadCSV(filename, columns, rows));
+  return btn;
+}
+
 // ---------- dashboard view ----------
 
 async function loadDashboard() {
@@ -151,6 +180,7 @@ async function loadDashboard() {
       card.appendChild(lineChart(rows.map(r => [String(r[0]), r[1]])));
     } else if (panel.type === "table") {
       card.appendChild(dataTable(columns, rows));
+      card.appendChild(exportButton(`${panel.id}.csv`, columns, rows));
     }
     container.appendChild(card);
   }
@@ -212,7 +242,35 @@ async function runQuery() {
     out.appendChild(el("p", { class: "note" }, "Query returned no columns."));
     return;
   }
-  out.appendChild(dataTable(data.columns, data.rows));
+
+  const toolbar = el("div", { class: "result-toolbar" });
+  toolbar.appendChild(exportButton("query-result.csv", data.columns, data.rows));
+
+  const canChart = data.columns.length === 2 && data.rows.length > 0 &&
+    isNumeric(data.rows[0][1]);
+  const body = el("div", { class: "result-body" });
+  body.appendChild(dataTable(data.columns, data.rows));
+
+  if (canChart) {
+    const chartRows = data.rows.map(r => [String(r[0]), r[1]]);
+    const toggle = el("button", { class: "chart-toggle" }, "View as chart");
+    let showingChart = false;
+    toggle.addEventListener("click", () => {
+      showingChart = !showingChart;
+      body.innerHTML = "";
+      if (showingChart) {
+        body.appendChild(barChart(chartRows));
+        toggle.textContent = "View as table";
+      } else {
+        body.appendChild(dataTable(data.columns, data.rows));
+        toggle.textContent = "View as chart";
+      }
+    });
+    toolbar.appendChild(toggle);
+  }
+
+  out.appendChild(toolbar);
+  out.appendChild(body);
 }
 
 // ---------- wiring ----------
