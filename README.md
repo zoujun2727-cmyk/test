@@ -1,88 +1,80 @@
-# HyperLogLog
+# SQL Analytics Dashboard
 
-A from-scratch, dependency-free implementation of **HyperLogLog**, the
-probabilistic algorithm for counting distinct elements in a stream using a
-fixed, tiny amount of memory.
+A small, self-contained web app for **data/analytics work where the dashboard
+is driven entirely by SQL**. Every panel — KPIs, bar charts, line charts,
+tables — is defined by a SQL query in a config file. There's also an ad-hoc
+SQL console for exploring the data.
 
-## The problem
+Built with the **Python standard library only** (no Flask, no pip installs) and
+**vanilla JS with hand-rolled SVG charts** (no CDN, no Chart.js). It runs
+anywhere Python 3 is installed and works fully offline.
 
-How many *distinct* values are in a stream? The exact answer requires
-remembering every value you've seen — `O(n)` memory. For a stream of a billion
-distinct 16-byte IDs, that's tens of gigabytes just to hold a set.
+![panels are KPIs, bar/line charts, and tables, all defined by SQL](https://img.shields.io/badge/deps-zero-brightgreen)
 
-HyperLogLog answers the same question with a small, bounded error using a fixed
-amount of memory that does **not** grow with the stream. The implementation
-here uses `2**p` one-byte registers — 16 KB at the default `p=14` — to count
-into the billions.
+## Quick start
 
-## The intuition
-
-1. **Hash everything.** Map each element to a uniformly random 64-bit string.
-   Duplicates collapse to the same hash, so only distinct elements matter.
-
-2. **Watch the leading zeros.** In random bitstrings, a hash starting with `k`
-   zeros occurs with probability `2**-(k+1)`. So if the longest leading-zero run
-   you've ever seen is `k`, you've probably seen on the order of `2**k` distinct
-   hashes. That single number is a (very noisy) cardinality estimate.
-
-3. **Average many estimators.** One estimator has huge variance. HyperLogLog
-   uses the first `p` bits of each hash to pick one of `m = 2**p` registers, and
-   the rest of the hash to update that register's max leading-zero count.
-   Combining the registers with a **harmonic mean** and a bias-correction
-   constant `alpha` crushes the variance.
-
-The relative error is approximately `1.04 / sqrt(m)`. At `p=14`,
-`m = 16384`, giving a standard error of about **0.81%**.
-
-A **small-range correction** (linear counting) kicks in when many registers are
-still empty, which is where the raw estimator is least accurate.
-
-## Why it's elegant
-
-Each register stores a *maximum*, so two HyperLogLogs over different shards of
-data merge by taking the element-wise max of their registers. This makes the
-structure trivially **parallelizable and distributable**: count shards
-independently on separate machines, then merge the sketches — no need to ever
-see the union of the raw data. The `merge()` method demonstrates this.
-
-## Usage
-
-```python
-from hyperloglog import HyperLogLog
-
-hll = HyperLogLog(p=14)
-for event in stream:
-    hll.add(event)         # accepts str, bytes, or any repr-able object
-
-print(hll.count())         # estimated distinct count
-print(len(hll))            # same thing
-
-# Distributed counting: merge independent sketches.
-a.merge(b)
+```bash
+python3 seed.py     # create analytics.db with a sample e-commerce dataset
+python3 app.py      # serve the dashboard
+# open http://localhost:8000
 ```
 
-## Results
+## What's inside
 
-Running `python3 hyperloglog.py` (default `p=14`, ~16 KB of registers):
+| File              | Role                                                              |
+| ----------------- | ----------------------------------------------------------------- |
+| `seed.py`         | Builds `analytics.db` (customers, products, orders, order_items). |
+| `dashboards.json` | **The dashboard, as SQL.** Each panel = a title, a type, a query. |
+| `app.py`          | Stdlib HTTP server + read-only SQLite API.                        |
+| `static/`         | Single-page UI and self-contained SVG charts.                     |
 
-| true      | estimate  | error  |
-| --------- | --------- | ------ |
-| 100       | 100       | 0.00%  |
-| 1,000     | 1,004     | 0.40%  |
-| 10,000    | 10,024    | 0.24%  |
-| 100,000   | 98,583    | 1.42%  |
-| 1,000,000 | 992,542   | 0.75%  |
+## Add a panel without touching code
 
-A million distinct items counted to within 1% — using a constant 16 KB,
-no matter how large the stream grows.
+The whole dashboard is data. To add a chart, append an entry to the `panels`
+array in `dashboards.json` — no Python or JS changes required:
 
-## Tuning
+```json
+{
+  "id": "refund_rate",
+  "title": "Refund Rate by Month",
+  "type": "line",
+  "sql": "SELECT strftime('%Y-%m', order_date) AS label, ROUND(100.0 * SUM(status='refunded') / COUNT(*), 2) AS value FROM orders GROUP BY label ORDER BY label"
+}
+```
 
-`p` controls the space/accuracy trade-off:
+Panel `type` values:
 
-| `p` | registers (`m`) | memory  | std. error |
-| --- | --------------- | ------- | ---------- |
-| 10  | 1,024           | 1 KB    | ~3.25%     |
-| 12  | 4,096           | 4 KB    | ~1.62%     |
-| 14  | 16,384          | 16 KB   | ~0.81%     |
-| 16  | 65,536          | 64 KB   | ~0.41%     |
+- `kpi` — first column of the first row, shown as a big number. Add
+  `"format": "currency"` to render as money.
+- `bar` — query returns `(label, value)` rows; rendered as a horizontal bar chart.
+- `line` — query returns `(label, value)` rows in order; rendered as a time series.
+- `table` — any number of columns; rendered as a sortable-looking data table.
+
+The convention is that charts read a `label` column and a `value` column, so
+your `SELECT` should alias accordingly (or just return them in that order).
+
+## The SQL console
+
+The **SQL Console** tab runs ad-hoc queries against the same database. The
+schema sidebar lists every table and column — click a table name to drop it
+into the editor. Run with the button or **Ctrl/Cmd + Enter**.
+
+## Safety
+
+Queries are **read-only**, enforced two ways:
+
+1. The database connection is opened with SQLite's `mode=ro` URI, so no
+   statement can ever modify the data.
+2. The console additionally rejects anything that isn't a single `SELECT`/`WITH`
+   statement (no `INSERT`, `UPDATE`, `DELETE`, `DROP`, `PRAGMA`, multi-statement
+   batches, etc.).
+
+Result sets are capped at 1,000 rows so a careless `SELECT *` can't flood the
+browser.
+
+## Using your own data
+
+Point it at a real database by replacing `seed.py` / `analytics.db` with your
+own SQLite file (or adapt `open_readonly()` in `app.py` to your engine), then
+rewrite the queries in `dashboards.json` against your schema. The app doesn't
+care what the data is — it just runs the SQL you give it.

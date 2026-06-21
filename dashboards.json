@@ -1,0 +1,63 @@
+{
+  "title": "E-commerce Analytics",
+  "panels": [
+    {
+      "id": "total_revenue",
+      "title": "Total Revenue",
+      "type": "kpi",
+      "format": "currency",
+      "sql": "SELECT ROUND(SUM(oi.quantity * oi.unit_price), 2) AS value FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE o.status = 'completed'"
+    },
+    {
+      "id": "total_orders",
+      "title": "Completed Orders",
+      "type": "kpi",
+      "format": "number",
+      "sql": "SELECT COUNT(*) AS value FROM orders WHERE status = 'completed'"
+    },
+    {
+      "id": "avg_order_value",
+      "title": "Avg Order Value",
+      "type": "kpi",
+      "format": "currency",
+      "sql": "SELECT ROUND(SUM(line_total) / COUNT(DISTINCT order_id), 2) AS value FROM (SELECT oi.order_id, SUM(oi.quantity * oi.unit_price) AS line_total FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE o.status = 'completed' GROUP BY oi.order_id)"
+    },
+    {
+      "id": "active_customers",
+      "title": "Customers w/ Orders",
+      "type": "kpi",
+      "format": "number",
+      "sql": "SELECT COUNT(DISTINCT customer_id) AS value FROM orders WHERE status = 'completed'"
+    },
+    {
+      "id": "revenue_by_month",
+      "title": "Revenue by Month",
+      "type": "line",
+      "sql": "SELECT strftime('%Y-%m', o.order_date) AS label, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS value FROM orders o JOIN order_items oi ON oi.order_id = o.id WHERE o.status = 'completed' GROUP BY label ORDER BY label"
+    },
+    {
+      "id": "revenue_by_category",
+      "title": "Revenue by Category",
+      "type": "bar",
+      "sql": "SELECT p.category AS label, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS value FROM order_items oi JOIN products p ON p.id = oi.product_id JOIN orders o ON o.id = oi.order_id WHERE o.status = 'completed' GROUP BY p.category ORDER BY value DESC"
+    },
+    {
+      "id": "customers_by_channel",
+      "title": "Acquisition Channel",
+      "type": "bar",
+      "sql": "SELECT channel AS label, COUNT(*) AS value FROM customers GROUP BY channel ORDER BY value DESC"
+    },
+    {
+      "id": "top_products",
+      "title": "Top Products by Revenue",
+      "type": "table",
+      "sql": "SELECT p.name AS product, p.category AS category, SUM(oi.quantity) AS units, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue FROM order_items oi JOIN products p ON p.id = oi.product_id JOIN orders o ON o.id = oi.order_id WHERE o.status = 'completed' GROUP BY p.id ORDER BY revenue DESC LIMIT 10"
+    },
+    {
+      "id": "revenue_by_country",
+      "title": "Revenue by Country",
+      "type": "bar",
+      "sql": "SELECT c.country AS label, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS value FROM orders o JOIN customers c ON c.id = o.customer_id JOIN order_items oi ON oi.order_id = o.id WHERE o.status = 'completed' GROUP BY c.country ORDER BY value DESC"
+    }
+  ]
+}

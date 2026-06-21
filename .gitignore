@@ -1,0 +1,4 @@
+# Generated database (recreate with `python3 seed.py`)
+analytics.db
+__pycache__/
+*.pyc
