@@ -1,0 +1,15 @@
+[Unit]
+Description=SQL Analytics Dashboard
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/sql-dashboard
+ExecStartPre=/bin/sh -c '[ -f /opt/sql-dashboard/analytics.db ] || /usr/bin/python3 /opt/sql-dashboard/seed.py'
+ExecStart=/usr/bin/python3 /opt/sql-dashboard/app.py
+Restart=always
+RestartSec=3
+User=www-data
+
+[Install]
+WantedBy=multi-user.target

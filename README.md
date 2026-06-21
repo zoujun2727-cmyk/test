@@ -86,3 +86,39 @@ Point it at a real database by replacing `seed.py` / `analytics.db` with your
 own SQLite file (or adapt `open_readonly()` in `app.py` to your engine), then
 rewrite the queries in `dashboards.json` against your schema. The app doesn't
 care what the data is — it just runs the SQL you give it.
+
+## Deploying
+
+The app has no dependencies, so deployment is just "get Python 3 onto a
+machine and run it."
+
+**Docker:**
+
+```bash
+docker build -t sql-dashboard .
+docker run -p 8000:8000 sql-dashboard
+```
+
+The image seeds `analytics.db` at build time (see `Dockerfile`). Mount your
+own database over `/app/analytics.db` to serve real data instead.
+
+**systemd (bare server):**
+
+```bash
+sudo mkdir -p /opt/sql-dashboard
+sudo cp -r * /opt/sql-dashboard/
+sudo cp deploy/sql-dashboard.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now sql-dashboard
+```
+
+`deploy/sql-dashboard.service` seeds the database only if `analytics.db`
+doesn't already exist, runs as `www-data`, and restarts on failure.
+
+**Behind a reverse proxy:** the app only binds plain HTTP on port 8000.
+For a public/HTTPS deployment, put `nginx` or `caddy` in front to terminate
+TLS and proxy to `localhost:8000`.
+
+**Concurrency note:** `http.server`'s `ThreadingHTTPServer` is fine for an
+internal team dashboard. For heavier concurrent load, front it with a proper
+WSGI server, or treat this as a reference implementation to port to one.
